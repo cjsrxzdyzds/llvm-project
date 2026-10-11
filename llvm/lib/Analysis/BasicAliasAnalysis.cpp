@@ -1633,7 +1633,12 @@ AliasResult BasicAAResult::aliasCheck(const Value *V1, LocationSize V1Size,
       isObjectSmallerThan(O1, *V2, V2Size, DL, TLI, NullIsValidLocation))
     return AliasResult::NoAlias;
 
-  if (EnableSeparateStorageAnalysis) {
+  // A separate_storage assumption describes the values its operands have when
+  // it executes. If the query may compare values from different cycle
+  // iterations, use it only if both objects have one value in every iteration.
+  if (EnableSeparateStorageAnalysis &&
+      isValueEqualInPotentialCycles(O1, O1, AAQI) &&
+      isValueEqualInPotentialCycles(O2, O2, AAQI)) {
     for (AssumptionCache::ResultElem &Elem : AC.assumptionsFor(O1)) {
       if (!Elem || Elem.Index == AssumptionCache::ExprResultIdx)
         continue;
