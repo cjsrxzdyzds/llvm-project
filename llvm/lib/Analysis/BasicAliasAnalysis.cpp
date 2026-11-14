@@ -433,6 +433,11 @@ struct LinearExpression {
   }
 
   LinearExpression mul(const APInt &Other, bool MulIsNUW, bool MulIsNSW) const {
+    // In one bit, the value 1 is signed -1.
+    bool IsOneBit = Other.getBitWidth() == 1;
+    if (Other.isOne() && !IsOneBit)
+      return *this;
+
     // The check for zero offset is necessary, because generally
     // (X +nsw Y) *nsw Z does not imply (X *nsw Z) +nsw (Y *nsw Z).
     bool NSW = IsNSW && (Other.isOne() || (MulIsNSW && Offset.isZero()));
@@ -441,8 +446,10 @@ struct LinearExpression {
     // scale does not overflow. Otherwise the scale we record is not the value
     // V is multiplied by: V * 2^32 * 2^31 is V * 2^63 and is defined for
     // V == -1, while V *nsw INT64_MIN is not.
-    bool ScaleOverflow;
-    APInt NewScale = Scale.smul_ov(Other, ScaleOverflow);
+    bool ScaleOverflow = false;
+    APInt NewScale = NSW && (IsOneBit || !Scale.isOne())
+                         ? Scale.smul_ov(Other, ScaleOverflow)
+                         : Scale * Other;
     NSW &= !ScaleOverflow;
     return LinearExpression(Val, NewScale, Offset * Other, NUW, NSW);
   }
